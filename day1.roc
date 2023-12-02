@@ -21,17 +21,7 @@ main =
 
 extractCalibrationValue : Str -> U64
 extractCalibrationValue = \line ->
-    line
-    |> replaceWordWithNumber
-    |> Str.graphemes
-    |> List.walk [] \state, elem ->
-        if isDigit elem then
-            when state is
-                [] -> [elem, elem]
-                [first, ..] -> [first, elem]
-        else
-            state
-    |> Str.joinWith ""
+    Str.concat (firstDigit line LeftToRight) (firstDigit line RightToLeft)
     |> Str.toU64
     |> Result.withDefault 0
 
@@ -48,14 +38,46 @@ expect extractCalibrationValue "4nineeightseven2" == 42
 expect extractCalibrationValue "zoneight234" == 14
 expect extractCalibrationValue "7pqrstsixteen" == 76
 
-isDigit : Str -> Bool
-isDigit = \value ->
-    value
-    |> Str.toU8
-    |> Result.isOk
+expect extractCalibrationValue "2threesixqczmrxhdrsevenfouroneight" == 28
 
-expect isDigit "5" == Bool.true
-expect isDigit "a" == Bool.false
+Direction : [LeftToRight, RightToLeft]
+
+firstDigit : Str, Direction -> Str
+firstDigit = \value, direction ->
+    result =
+        value
+        |> parseDigitNumber direction
+        |> Result.onErr (\_ -> parseDigitWord value direction)
+
+    nextValue =
+        dropFirst value direction
+
+    when result is
+        Ok digit -> digit
+        Err _ ->
+            if nextValue == "" then
+                "0"
+            else
+                firstDigit nextValue direction
+
+expect firstDigit "1two" LeftToRight == "1"
+expect firstDigit "twone3" LeftToRight == "2"
+expect firstDigit "xtwone3" LeftToRight == "2"
+expect firstDigit "xtwelvene3" LeftToRight == "1"
+
+expect firstDigit "7pqrstsixteen" RightToLeft == "6"
+
+expect parseDigitNumber "1one2" LeftToRight == Ok "1"
+expect parseDigitNumber "one" LeftToRight == Err Error
+
+expect parseDigitWord "oneight" LeftToRight == Ok "1"
+expect parseDigitWord "twenty" LeftToRight == Ok "2"
+
+expect parseDigitNumber "1two3" RightToLeft == Ok "3"
+expect parseDigitNumber "one" RightToLeft == Err Error
+
+expect parseDigitWord "oneight" RightToLeft == Ok "8"
+expect parseDigitWord "twenty" RightToLeft == Ok "0"
 
 wordsToNumber = [
     ("one", "1"),
@@ -67,58 +89,78 @@ wordsToNumber = [
     ("seven", "7"),
     ("eight", "8"),
     ("nine", "9"),
-    ("ten", "0"),
-    ("eleven", "1"),
-    ("twelve", "2"),
-    ("thirteen", "3"),
-    ("fourteen", "4"),
-    ("fifteen", "5"),
-    ("sixteen", "6"),
-    ("seventeen", "7"),
-    ("eighteen", "8"),
-    ("nineteen", "9"),
-    ("twenty", "0"),
-    ("thirty", "0"),
-    ("forty", "0"),
-    ("fifty", "0"),
-    ("sixty", "0"),
-    ("seventy", "0"),
-    ("eighty", "0"),
-    ("ninety", "0"),
-    ("hundred", "0"),
-    ("thousand", "0"),
-    ("million", "0"),
-    ("billion", "0"),
+    ("ten", "10"),
+    ("eleven", "11"),
+    ("twelve", "12"),
+    ("thirteen", "13"),
+    ("fourteen", "14"),
+    ("fifteen", "15"),
+    ("sixteen", "16"),
+    ("seventeen", "17"),
+    ("eighteen", "18"),
+    ("nineteen", "19"),
+    ("twenty", "20"),
+    ("thirty", "30"),
+    ("forty", "40"),
+    ("fifty", "50"),
+    ("sixty", "60"),
+    ("seventy", "70"),
+    ("eighty", "80"),
+    ("ninety", "90"),
 ]
 
-replaceWordWithNumber : Str -> Str
-replaceWordWithNumber = \value ->
-    replacedWord =
-        wordsToNumber
-        |> List.walkUntil value \state, (word, number) ->
-            if Str.startsWith value word then
-                Break (Str.replaceFirst value word number)
-            else
-                Continue state
+reverse : Str -> Str
+reverse = \value ->
+    value
+    |> Str.graphemes
+    |> List.reverse
+    |> Str.joinWith ""
 
-    graphemes = Str.graphemes replacedWord
-    withoutFirstLetter =
-        graphemes
-        |> List.dropFirst 1
-        |> Str.joinWith ""
+dropFirst : Str, Direction -> Str
+dropFirst = \value, direction ->
+    value
+    |> Str.graphemes
+    |> \list ->
+        when direction is
+            LeftToRight ->
+                List.dropFirst list 1
 
-    when graphemes is
-        [] -> ""
-        [firstLetter] -> firstLetter
-        [firstLetter, ..] -> Str.concat firstLetter (replaceWordWithNumber withoutFirstLetter)
+            RightToLeft ->
+                List.dropLast list 1
+    |> Str.joinWith ""
 
+parseDigitNumber : Str, Direction -> Result Str [Error]
+parseDigitNumber = \value, direction ->
+    value
+    |> Str.graphemes
+    |> \graphemes ->
+        when direction is
+            LeftToRight -> List.first graphemes
+            RightToLeft -> List.last graphemes
+    |> Result.try Str.toU8
+    |> Result.map Num.toStr
+    |> Result.mapErr \_ -> Error
 
+parseDigitWord : Str, Direction -> Result Str [Error]
+parseDigitWord = \value, direction ->
+    directedValue =
+        when direction is
+            LeftToRight -> value
+            RightToLeft -> reverse value
 
-expect replaceWordWithNumber "two1nine" == "219"
-expect
-    output = replaceWordWithNumber "eightwothree"
-    output == "8wo3"
+    wordsToNumber
+    |> List.walkUntil (Err Error) \_, (word, number) ->
+        when direction is
+            LeftToRight ->
+                if Str.startsWith directedValue word then
+                    Break (Ok number)
+                else
+                    Continue (Err Error)
 
-expect
-    output = replaceWordWithNumber "xtwone3four"
-    output == "x2ne34"
+            RightToLeft ->
+                if Str.startsWith directedValue (reverse word) then
+                    Break (Ok (reverse number))
+                else
+                    Continue (Err Error)
+    |> Result.try (\digit -> digit |> Str.graphemes |> List.first)
+    |> Result.mapErr (\_ -> Error)

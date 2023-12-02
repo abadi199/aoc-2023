@@ -69,10 +69,11 @@ runTask =
     {} <- Stdout.write (ANSI.toStr Reset) |> Task.await
     {} <- Tty.disableRawMode |> Task.await
 
-    # EXIT or RUN selected solution 
-    when model.state is 
-        RunSolution s -> 
+    # EXIT or RUN selected solution
+    when model.state is
+        RunSolution s ->
             runSolution s
+
         _ ->
             {} <- Stdout.line "Exiting... wishing you a very Merry Christmas!" |> Task.await
             Task.ok {}
@@ -118,34 +119,33 @@ runUILoop = \prevModel ->
     # Action command
     when command is
         Nothing -> Task.ok (Step modelWithInput)
-        Exit -> Task.ok (Done {modelWithInput & state: UserExited})
+        Exit -> Task.ok (Done { modelWithInput & state: UserExited })
         ToggleDebug -> Task.ok (Step { modelWithInput & debug: !modelWithInput.debug })
         MoveCursor direction -> Task.ok (Step (ANSI.updateCursor modelWithInput direction))
-        UserWantToRunSolution s -> Task.ok (Done {modelWithInput & state: RunSolution s})
-        UserToggledScreen -> 
+        UserWantToRunSolution s -> Task.ok (Done { modelWithInput & state: RunSolution s })
+        UserToggledScreen ->
             when modelWithInput.state is
-                HomePage -> 
+                HomePage ->
                     result = getSelected modelWithInput
 
                     when result is
-                        Ok s -> Task.ok (Step {modelWithInput & state: ConfirmPage s})
+                        Ok s -> Task.ok (Step { modelWithInput & state: ConfirmPage s })
                         Err NothingSelected -> Task.ok (Step modelWithInput)
-    
-                _ -> Task.ok (Step {modelWithInput & state: HomePage})
-        
 
-mapSelected : Model -> List {selected: Bool, s: AoC.Solution, row: I32}
+                _ -> Task.ok (Step { modelWithInput & state: HomePage })
+
+mapSelected : Model -> List { selected : Bool, s : AoC.Solution, row : I32 }
 mapSelected = \model ->
     s, idx <- List.mapWithIndex model.solutions
-               
+
     row = 3 + (Num.toI32 idx)
 
     { selected: model.cursor.row == row, s, row }
 
 getSelected : Model -> Result AoC.Solution [NothingSelected]
-getSelected = \model -> 
+getSelected = \model ->
     mapSelected model
-    |> List.keepOks \{selected, s} -> if selected then Ok s else Err {}
+    |> List.keepOks \{ selected, s } -> if selected then Ok s else Err {}
     |> List.first
     |> Result.mapErr \_ -> NothingSelected
 
@@ -172,30 +172,27 @@ homeScreen = \model ->
             ANSI.drawText " ENTER TO RUN, ESCAPE TO QUIT" { r: 2, c: 1, fg: Gray },
             ANSI.drawBox { r: 0, c: 0, w: model.screen.width, h: model.screen.height },
         ],
-        (
-            { selected, s, row } <- model |> mapSelected |> List.map 
+        { selected, s, row } <- model |> mapSelected |> List.map
 
-            if selected then
-                ANSI.drawText " > \(AoC.display s)" { r: row, c: 2, fg: Green }
-            else
-                ANSI.drawText " - \(AoC.display s)" { r: row, c: 2, fg: Black }
-        )
+        if selected then
+            ANSI.drawText " > \(AoC.display s)" { r: row, c: 2, fg: Green }
+        else
+            ANSI.drawText " - \(AoC.display s)" { r: row, c: 2, fg: Black },
     ]
     |> List.join
 
 confirmScreen : Model, AoC.Solution -> List DrawFn
-confirmScreen = \state, solution -> 
-    [
-        ANSI.drawCursor { bg: Green },
-        ANSI.drawText " Would you like to run \(AoC.display solution)?" { r: 1, c: 1, fg: Yellow },
-        ANSI.drawText "CONFIRM" { r: 2, c: 11, fg: Blue },
-        ANSI.drawText "RETURN" { r: 2, c: 30, fg: Red },
-        ANSI.drawText " ENTER TO CONFIRM, ESCAPE TO RETURN" { r: 2, c: 1, fg: Gray },
-        ANSI.drawText " title: \(solution.title)" { r: 3, c: 1 },
-        ANSI.drawText " year: \(Num.toStr solution.year)" { r: 4, c: 1 },
-        ANSI.drawText " day: \(Num.toStr solution.day)" { r: 5, c: 1 },
-        ANSI.drawBox { r: 0, c: 0, w: state.screen.width, h: state.screen.height },
-    ]
+confirmScreen = \state, solution -> [
+    ANSI.drawCursor { bg: Green },
+    ANSI.drawText " Would you like to run \(AoC.display solution)?" { r: 1, c: 1, fg: Yellow },
+    ANSI.drawText "CONFIRM" { r: 2, c: 11, fg: Blue },
+    ANSI.drawText "RETURN" { r: 2, c: 30, fg: Red },
+    ANSI.drawText " ENTER TO CONFIRM, ESCAPE TO RETURN" { r: 2, c: 1, fg: Gray },
+    ANSI.drawText " title: \(solution.title)" { r: 3, c: 1 },
+    ANSI.drawText " year: \(Num.toStr solution.year)" { r: 4, c: 1 },
+    ANSI.drawText " day: \(Num.toStr solution.day)" { r: 5, c: 1 },
+    ANSI.drawBox { r: 0, c: 0, w: state.screen.width, h: state.screen.height },
+]
 
 debugScreen : Model -> List DrawFn
 debugScreen = \state ->
@@ -245,7 +242,7 @@ runSolution = \solution ->
     part1Time = ANSI.withFg (deltaToStr start mid) Blue
     part2Time = ANSI.withFg (deltaToStr mid end) Blue
     totalTime = ANSI.withFg (deltaToStr start end) Blue
-    
+
     """
     ---------------------------------
     \(header)
@@ -274,10 +271,9 @@ solutionResultToStr = \result ->
 
 deltaToStr : Utc, Utc -> Str
 deltaToStr = \start, end ->
-   millis = Utc.deltaAsMillis start end 
+    millis = Utc.deltaAsMillis start end
 
-   if millis == 0 then
-       "<0 ms"
-   else
-    Num.toStr millis
-   
+    if millis == 0 then
+        "<0 ms"
+    else
+        Num.toStr millis

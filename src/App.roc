@@ -13,7 +13,7 @@ interface App
 
 ## Export a list of the solutions included in this app
 solutions : List AoC.Solution
-solutions = 
+solutions =
     [
         S2022.D01.solution,
         S2023.D01.solution,
@@ -33,14 +33,14 @@ solvePuzzle = \selection ->
         (_, Err ListWasEmpty) -> Err NotImplemented
 
 sortByYearAndDay : AoC.Solution, AoC.Solution -> [LT, EQ, GT]
-sortByYearAndDay = \first, second -> 
-    if first.year < second.year then 
+sortByYearAndDay = \first, second ->
+    if first.year < second.year then
         GT
-    else if first.year > second.year then 
+    else if first.year > second.year then
         LT
-    else if first.day < second.day then 
+    else if first.day < second.day then
         GT
-    else if first.day > second.day then 
+    else if first.day > second.day then
         LT
-    else 
+    else
         EQ

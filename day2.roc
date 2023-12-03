@@ -7,20 +7,12 @@ app "AoC"
 
 main : Task {} *
 main =
-    bag =
-        { red: 12, green: 13, blue: 14 }
-
-    possibleGames =
+    sum =
         input
         |> Str.split "\n"
         |> List.map parse
         |> List.keepOks (\a -> a)
-        |> List.keepIf
-            (\game -> isPossible bag game)
-
-    sum =
-        possibleGames
-        |> List.map .id
+        |> List.map power
         |> List.walk 0 Num.add
 
     Stdout.line
@@ -32,35 +24,70 @@ Game : {
 }
 
 GameSet : {
-    red : U64,
-    green : U64,
-    blue : U64,
+    r : U64,
+    g : U64,
+    b : U64,
 }
+
+power : Game -> U64
+power = \game ->
+    game.sets
+    |> maximum
+    |> \{ r, g, b } -> r * g * b
+
+expect
+    power {
+        id: 1,
+        sets: [
+            { r: 4, g: 0, b: 3 },
+            { r: 1, g: 2, b: 6 },
+            { r: 0, g: 2, b: 0 },
+        ],
+    }
+    == 48
+
+maximum : List GameSet -> GameSet
+maximum = \list ->
+    list
+    |> List.walk { r: 0, g: 0, b: 0 } \state, cube -> {
+        r: Num.max state.r cube.r,
+        g: Num.max state.g cube.g,
+        b: Num.max state.b cube.b,
+
+    }
+
+expect
+    maximum [
+        { r: 4, g: 0, b: 3 },
+        { r: 1, g: 2, b: 6 },
+        { r: 0, g: 2, b: 0 },
+    ]
+    == { r: 4, g: 2, b: 6 }
 
 isPossible : GameSet, Game -> Bool
 isPossible = \bag, game ->
     game.sets
-    |> List.map (\gameSet -> bag.red >= gameSet.red && bag.green >= gameSet.green && bag.blue >= gameSet.blue)
+    |> List.map (\gameSet -> bag.r >= gameSet.r && bag.g >= gameSet.g && bag.b >= gameSet.b)
     |> List.walk Bool.true (Bool.and)
 
 expect
     isPossible
-        { red: 12, green: 13, blue: 14 }
-        { id: 1, sets: [{ blue: 3, red: 4, green: 0 }] }
+        { r: 12, g: 13, b: 14 }
+        { id: 1, sets: [{ b: 3, r: 4, g: 0 }] }
     == Bool.true
 expect
     isPossible
-        { red: 12, green: 13, blue: 14 }
-        { id: 1, sets: [{ blue: 3, red: 14, green: 0 }] }
+        { r: 12, g: 13, b: 14 }
+        { id: 1, sets: [{ b: 3, r: 14, g: 0 }] }
     == Bool.false
 expect
     isPossible
-        { red: 12, green: 13, blue: 14 }
+        { r: 12, g: 13, b: 14 }
         {
             id: 1,
             sets: [
-                { blue: 6, red: 4, green: 5 },
-                { blue: 3, red: 14, green: 0 },
+                { b: 6, r: 4, g: 5 },
+                { b: 3, r: 14, g: 0 },
             ],
         }
     == Bool.false
@@ -84,9 +111,9 @@ expect
     == Ok {
         id: 1,
         sets: [
-            { red: 4, green: 0, blue: 3 },
-            { red: 1, green: 2, blue: 6 },
-            { red: 0, green: 2, blue: 0 },
+            { r: 4, g: 0, b: 3 },
+            { r: 1, g: 2, b: 6 },
+            { r: 0, g: 2, b: 0 },
         ],
     }
 
@@ -111,15 +138,15 @@ parseGameSet = \value ->
     |> List.map Str.trim
     |> List.map parseCube
     |> List.walk
-        { red: 0, green: 0, blue: 0 }
+        { r: 0, g: 0, b: 0 }
         \cube, cubeResult ->
             when cubeResult is
-                Ok (Red count) -> { cube & red: cube.red + count }
-                Ok (Green count) -> { cube & green: cube.green + count }
-                Ok (Blue count) -> { cube & blue: cube.blue + count }
+                Ok (Red count) -> { cube & r: cube.r + count }
+                Ok (Green count) -> { cube & g: cube.g + count }
+                Ok (Blue count) -> { cube & b: cube.b + count }
                 _ -> cube
 
-expect parseGameSet "3 blue, 4 red" == { red: 4, green: 0, blue: 3 }
+expect parseGameSet "3 blue, 4 red" == { r: 4, g: 0, b: 3 }
 
 Cube : [Red U64, Green U64, Blue U64]
 
@@ -146,18 +173,3 @@ parseCube = \value ->
         Err Error
 
 expect parseCube "3 blue" == Ok (Blue 3)
-
-map2 : Result a err, Result b err, (a, b -> c) -> Result c err
-map2 = \a, b, f ->
-    when (a, b) is
-        (Ok aa, Ok bb) -> Ok (f aa bb)
-        (Err e, _) -> Err e
-        (_, Err e) -> Err e
-
-join : List (Result a e) -> Result (List a) e
-join = \list ->
-    list
-    |> List.walk (Ok []) \state, result ->
-        when result is
-            Ok a -> state |> Result.map (\listState -> List.append listState a)
-            Err e -> Err e

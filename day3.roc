@@ -7,13 +7,16 @@ app "AoC"
 
 main : Task {} *
 main =
-    schema =
+    result =
         input
         |> Str.split "\n"
         |> List.mapWithIndex parseLine
         |> combineSchemas
+        |> filterParts
+        |> sum
+        |> Num.toStr
 
-    Stdout.line ""
+    Stdout.line result
 
 Coord : (Nat, Nat)
 
@@ -22,6 +25,66 @@ Part : (U64, Coord)
 Symbol : (Str, Coord)
 
 Schema : { parts : List Part, symbols : List Symbol }
+
+sum : Schema -> U64
+sum = \{ parts } ->
+    parts
+    |> List.walk 0 \state, (partNumber, _) ->
+        state + partNumber
+
+filterParts : Schema -> Schema
+filterParts = \schema -> {
+    parts: schema.parts
+    |> List.keepIf (\part -> isPart part schema.symbols),
+    symbols: schema.symbols,
+}
+
+isPart : Part, List Symbol -> Bool
+isPart = \part, symbols ->
+    symbols
+    |> List.walkUntil
+        Bool.false
+        (\_, symbol ->
+            if isAdjecent part symbol then
+                Break Bool.true
+            else
+                Continue Bool.false)
+
+isAdjecent : Part, Symbol -> Bool
+isAdjecent = \(number, (pX, pY)), (_, (sX, sY)) ->
+    numberLength =
+        number
+        |> Num.toStr
+        |> Str.graphemes
+        |> List.len
+
+    r1 = { x1: pX, y1: pY, x2: pX + numberLength - 1, y2: pY }
+    r2 = {
+        x1: if sX > 0 then sX - 1 else 0,
+        y1: if sY > 0 then sY - 1 else 0,
+        x2: sX + 1,
+        y2: sY + 1,
+    }
+
+    noOverlap =
+        (r1.x1 > r2.x2)
+        || (r2.x1 > r1.x2)
+        || (r1.y1 > r2.y2)
+        || (r2.y1 > r1.y2)
+
+    !noOverlap
+
+expect
+    isAdjecent
+        (467, (0, 0))
+        ("*", (3, 1))
+    == Bool.true
+
+expect
+    isAdjecent
+        (114, (5, 0))
+        ("*", (3, 1))
+    == Bool.false
 
 combineSchemas : List Schema -> Schema
 combineSchemas = \list ->

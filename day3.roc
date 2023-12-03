@@ -7,9 +7,15 @@ app "AoC"
 
 main : Task {} *
 main =
+    schema =
+        input
+        |> Str.split "\n"
+        |> List.mapWithIndex parseLine
+        |> combineSchemas
+
     Stdout.line ""
 
-Coord : (U64, U64)
+Coord : (Nat, Nat)
 
 Part : (U64, Coord)
 
@@ -17,31 +23,52 @@ Symbol : (Str, Coord)
 
 Schema : { parts : List Part, symbols : List Symbol }
 
-parseLine : U64, Str -> Schema
-parseLine = \y, value -> {
-    parts: parseParts y value,
-    symbols: [],
+combineSchemas : List Schema -> Schema
+combineSchemas = \list ->
+    list
+    |> List.walk { parts: [], symbols: [] } \state, schema -> {
+        parts: List.concat state.parts schema.parts,
+        symbols: List.concat state.symbols schema.symbols,
+    }
+
+parseLine : Str, Nat -> Schema
+parseLine = \value, y -> {
+    parts: parseParts value y,
+    symbols: parseSymbols value y,
 }
 
-parseParts : U64, Str -> List Part
-parseParts = \y, value ->
+parseParts : Str, Nat -> List Part
+parseParts = \value, y ->
     value
-    |> parser
-    |> List.keepOks (\r -> toPart y r)
+    |> partParser
+    |> List.keepOks (\r -> toPart r y)
 
-expect parseParts 0 "467..114.." == [(467, (0, 0)), (114, (5, 0))]
-expect parseParts 1 "...*......" == []
-expect parseParts 2 "..35..633." == [(35, (2, 2)), (633, (6, 2))]
+expect parseParts "467..114.." 0 == [(467, (0, 0)), (114, (5, 0))]
+expect parseParts "...*......" 1 == []
+expect parseParts "..35..633." 2 == [(35, (2, 2)), (633, (6, 2))]
+
+parseSymbols : Str, Nat -> List Symbol
+parseSymbols = \value, y ->
+    value
+    |> Str.graphemes
+    |> List.walkWithIndex [] \symbols, g, x ->
+        if isDigit g || g == "." then
+            symbols
+        else
+            List.append symbols ((g, (x, y)))
+
+expect parseSymbols "...*......" 1 == [("*", (3, 1))]
+expect parseSymbols "...$.*...." 8 == [("$", (3, 8)), ("*", (5, 8))]
 
 isDigit : Str -> Bool
 isDigit = \value ->
     ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
     |> List.contains value
 
-ParserOutput : [Num (List Str) U64, Skip]
+ParserOutput : [Num (List Str) Nat, Skip]
 
-parser : Str -> List ParserOutput
-parser = \value ->
+partParser : Str -> List ParserOutput
+partParser = \value ->
     value
     |> Str.graphemes
     |> List.walkWithIndex [] \state, grapheme, x ->
@@ -50,7 +77,7 @@ parser = \value ->
                 [] | [.., Skip] ->
                     List.append
                         state
-                        (Num [grapheme] (Num.toU64 x))
+                        (Num [grapheme] (x))
 
                 [.., Num list xCoord] ->
                     List.append
@@ -60,14 +87,13 @@ parser = \value ->
             List.append state Skip
 
 expect
-    parser "467"
+    partParser "467"
     == [
         Num ["4", "6", "7"] 0,
     ]
 
 expect
-    o = parser "467..114.."
-    o
+    partParser "467..114.."
     == [
         Num ["4", "6", "7"] 0,
         Skip,
@@ -77,8 +103,8 @@ expect
         Skip,
     ]
 
-toPart : U64, ParserOutput -> Result Part [Error]
-toPart = \y, value ->
+toPart : ParserOutput, Nat -> Result Part [Error]
+toPart = \value, y ->
     when value is
         Num list x ->
             list
